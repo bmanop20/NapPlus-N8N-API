@@ -2,6 +2,8 @@
 
 ### [ขั้นตอนการติดตั้ง](https://github.com/bmanop20/NapPlus-N8N-API/tree/main/shell) (Click)
 
+### [เอกสารอื่น ๆ ](https://drive.google.com/drive/folders/1-3XP6dKwj2rolfeSuIxmtjf38OdXCTyY)
+
 สร้างฐานข้อมูลใน Server สำรองที่มีฐาน HosXP อยู่
 
 ```sql
@@ -41,3 +43,8 @@ Double Click Node mysql ใดก็ได้เพื่อสร้าง Conn
 หรือกดที่ปุ่ม play เพื่อให้ตัว node ทำงาน หากอยากดูผลลัพท์ ให้คลิกที่ node นั้น ๆ 
 
 ![1725455134648](image/README/1725455134648.png)
+
+
+หลังจากกดหนดค่าต่าง ๆ ทดสอบความถูกต้องเสร็จหากอยากให้ระบบทำงานอัตโนมัติ
+
+![1725455440642](image/README/1725455440642.png)
