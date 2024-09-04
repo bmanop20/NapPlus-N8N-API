@@ -1,0 +1,964 @@
+{
+  "name": "Nap API",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert IGNORE  INTO lab_visit (\n\tvn,\n\thn,\n    nap_number,\n\tvstdate,\n\tvsttime,\n\tlab_item_code,\n\tlab_type,\n\tresult,\n\tpatient_id ,\n    key_name,\n    nap_lab_item_code\n)\nVALUES\n\t(\n\t'{{ $json.vn }}',\n\t'{{ $json.hn }}',\n    '{{ $json.nap_number }}',\n\t'{{ $json.order_date }}',\n\t'{{ $json.report_time }}',\n\t'{{ $json.lab_items_code }}',\n\t'{{ $json.lab_type }}',\n\t'{{ $json.lab_order_result }}',\n\t'{{ $json.cid }}',\n    '{{ $json.key_name }}',\n    '{{ $json.nap_lab_item_code }}'\n\t);",
+        "options": {}
+      },
+      "id": "3e66a9e9-0a36-4785-a172-57680281b90f",
+      "name": "Insert Lab Visit History",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        740,
+        500
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "geh5j9rJbkRDyG0U",
+          "name": "MySQL Lookup_db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\n\nconst api = `https://dmis.nhso.go.th/NAPPLUSLABAPI/api/get_lab_request`;\nconst header = {\n    \"Username\": $input.first().json.username,\n    \"Password\" : $input.first().json.token,\n    \"Content-Type\" : \"application/json\",\n  };\n\nfor (const item of $input.all()) {\n    const date = new Date($input.first().json.vstdate).toLocaleDateString('th-TH',{year: 'numeric', month: '2-digit', day: '2-digit'});\n    const DMY = date.split(\"/\").reverse().join('');\n    const data = {\n    \"HEADER\":{\n        \"HCODE_REQUEST\": item.json.hcode_request ,\n        \"LAB_TYPE\": item.json.nap_lab_item_code,\n        \"REQUEST_DATE_FROM\": DMY.replace(/\\d{4}$/, '0101'),\n        \"REQUEST_DATE_TO\":DMY.replace(/\\d{4}$/, '1231'),\n        }\n    };\n  \n  data.HEADER.PATIENT_ID = (item.json.nap_lab_item_code == 204) ? item.json.nap_number : item.json.patient_id;\n  \n  const options = {\n    method: \"POST\",\n    headers: header,\n    url: api,\n    body: data,\n  };  \n  \n  try{\n    const response = await this.helpers.request(options);    \n    const dataJson = JSON.parse(response);\n    const result = dataJson.LAB_REQUEST.find((History)=>{\n        const date = new Date(item.json.vstdate).toLocaleDateString('th-TH',{year: 'numeric', month: '2-digit', day: '2-digit'});\n        const DMY = date.split(\"/\").reverse().join('');  \n        const patient_id = (item.json.nap_lab_item_code == 204) ? item.json.nap_number : item.json.patient_id;\n        return   History.PATIENT_ID == patient_id && History.REQUEST_DATE == DMY  ;\n  });\n  if(typeof result !== 'undefined')\n    item.json.lab_request_id = result.LAB_REQUEST_ID;\n\n  }catch(err){\n    const error = JSON.stringify(err.message);\n    console.log(error);\n  }\n}\n\nreturn $input.all();item.json.nap_lab_item_code"
+      },
+      "id": "90582f5b-ba4e-481e-8a36-0f43dd88eb24",
+      "name": "GET LAB Request ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update lab_visit \nset lab_request_id = '{{ $json.lab_request_id }}',\n  hcode_lab = '{{ $json.hcode_lab }}',\n  hcode_request = '{{ $json.hcode_request }}'\nwhere vn = '{{ $json.vn }}' and nap_lab_item_code = '{{ $json.nap_lab_item_code }}'",
+        "options": {}
+      },
+      "id": "955fce6c-f16f-40af-8d8a-074f20b636ee",
+      "name": "Update Lab Request ID TO Lab Visit",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1140,
+        500
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "geh5j9rJbkRDyG0U",
+          "name": "MySQL Lookup_db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 17 * * *"
+            }
+          ]
+        }
+      },
+      "id": "9fc659f5-17c2-47c4-a2fc-aacddfe3af61",
+      "name": "17.00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        140,
+        760
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "896f34dd-98f6-4056-b723-75df7d6ea0b7",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        560,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n\th.vn,\n\tp.hn,\n\th.order_date,\n\th.report_time,\n\tp.cid,\n    '' as nap_number,\n\to.lab_items_code,\n\to.lab_order_result,\n\to.lab_items_name_ref,\n\to.lab_items_normal_value_ref ,\n    l.lab_type,\n    l.key_name,\n    l.nap_lab_item_code\nFROM\n\thos.patient p\n\tINNER JOIN hos.lab_head h ON h.hn = p.hn\n\tINNER JOIN hos.lab_order o ON h.lab_order_number = o.lab_order_number\n\tINNER JOIN lookup_db.lab_item_code l on l.lab_item_code = o.lab_items_code\n\t\nWHERE\n\to.lab_order_result IS NOT NULL\n\tAND year(h.report_date) = year(now())\n\tand p.nationality = 99\n    and l.nap_lab_item_code in (101,102)\n    and month(h.report_date) = month(now())",
+        "options": {}
+      },
+      "id": "53261f70-af89-40ca-8182-7c0174430edc",
+      "name": "Select Lab Result (101,102)",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        380,
+        880
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "me439emC82C1YsZJ",
+          "name": "MySQL Slave"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldsToSummarize": {
+          "values": [
+            {
+              "field": "hn"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6811fa54-ded8-4415-9d5e-1d73939ec58c",
+      "name": "Count Not Send",
+      "type": "n8n-nodes-base.summarize",
+      "typeVersion": 1,
+      "position": [
+        1080,
+        1000
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n\th.vn,\n\tc.hn,\n\th.order_date,\n\th.report_time,\n\tp.cid,\n\tupper(c.nap_number) as nap_number,\n\to.lab_items_code,\n\to.lab_order_result,\n\to.lab_items_name_ref,\n\to.lab_items_normal_value_ref ,\n    l.lab_type,\n    l.key_name,\n    l.nap_lab_item_code\nFROM\n\thos.patient p\n\tLEFT JOIN hos.clinicmember c ON p.hn = c.hn\n\tINNER JOIN hos.lab_head h ON h.hn = c.hn\n\tINNER JOIN hos.lab_order o ON h.lab_order_number = o.lab_order_number\n\tINNER JOIN lookup_db.lab_item_code l on l.lab_item_code = o.lab_items_code\n\t\nWHERE\n\tc.clinic = 013 \n\tAND o.lab_order_result IS NOT NULL\n\tAND c.nap_number is not null\n\tAND year(h.report_date) = year(now())\n\tand p.nationality = 99\n\tand month(h.report_date) = month(now())",
+        "options": {}
+      },
+      "id": "9c79c29d-0f01-4b19-ab64-f2519f0d74a4",
+      "name": "Select Lab Result (204)",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        380,
+        680
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "me439emC82C1YsZJ",
+          "name": "MySQL Slave"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "a34dbfde-88ed-4d0f-a133-32eb6c52a08f",
+              "leftValue": "={{ $json.lab_request_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "42ac5997-97e5-4ddf-8db6-0382a6b0691b",
+      "name": "Lab Request ID Not Empty",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\nlab_visit.lab_request_id,  \nlab_visit.hcode_lab,\nlab_visit.hcode_request,\nlab_visit.vstdate,\nlab_visit.nap_lab_item_code,\n\tconcat(\n\t\t\t\t'[{\"LAB_TYPE\" : \"',lab_visit.nap_lab_item_code, '\",'\n\t\t\t\t,'\"LAB_REQUEST_ID\":','\"',lab_visit.lab_request_id,'\",'\n\t\t\t\t,'\"HCODE_REQUEST\":','\"',lab_visit.hcode_request,'\",'\n\t\t\t\t,'\"HCODE_LAB\":','\"',lab_visit.hcode_lab,'\",'  \n\t\t\t\t,'\"IS_DETECTED\":','\"',1,'\",'\n\t\t\t\t,'\"TEST_RESULT\": {'\n\t\t\t\t,GROUP_CONCAT('\"',lab_visit.key_name,'\":','\"', REPLACE(lab_visit.result,\",\",''),'\"'),\"} }]\") as json_data,\n  lab_token.*\nFROM\n\tlab_visit\n inner join lab_token\nWHERE\n\tlab_visit.send_status = 0\n\tAND lab_visit.lab_request_id is not null\n    -- and lab_visit.nap_lab_item_code = 101\ngroup by lab_visit.lab_request_id\n -- limit 1",
+        "options": {}
+      },
+      "id": "b20f3ecb-b2ba-4cd7-b629-74bcfd7d8535",
+      "name": "Select Result Lab To JSON",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1380,
+        500
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "geh5j9rJbkRDyG0U",
+          "name": "MySQL Lookup_db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "table": {
+          "__rl": true,
+          "value": "lab_visit",
+          "mode": "list",
+          "cachedResultName": "lab_visit"
+        },
+        "dataMode": "defineBelow",
+        "columnToMatchOn": "lab_request_id",
+        "valueToMatchOn": "={{ $json.lab_request_id }}",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "send_status",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8d6285fd-eed8-42c0-9631-26ac093365cb",
+      "name": "Update Send Status",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1700,
+        860
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "geh5j9rJbkRDyG0U",
+          "name": "MySQL Lookup_db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n\tv.*,\n\tl.hcode_request,\n\tl.hcode_lab,\n\tl.nap_lab_item_code,\n\tk.*\nFROM\n\tlab_visit v\n\tINNER JOIN lab_item_code l ON l.lab_item_code = v.lab_item_code\n\tinner join lab_token k\nWHERE\n\tv.send_status = 0\ngroup by v.vn,l.nap_lab_item_code",
+        "options": {}
+      },
+      "id": "8468296a-20e1-441e-9a57-f24c43a2e657",
+      "name": "Select All VisitLab Not Send",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        940,
+        500
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "geh5j9rJbkRDyG0U",
+          "name": "MySQL Lookup_db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\n\nconst api = `https://dmis.nhso.go.th/NAPPLUSLABAPI/api/set_lab_result`;\nconst header = {\n    \"Username\": $input.first().json.username,\n    \"Password\" : $input.first().json.token,\n    \"Content-Type\" : \"application/json\",\n  };\n\nfor (const item of $input.all()) {\nconst date = new Date(item.json.vstdate).toLocaleDateString('th-TH',{year: 'numeric', month: '2-digit', day: '2-digit'});\n    const DMY = date.split(\"/\").reverse().join('');\n    // console.log(item.json.lab_request_id);\n    // console.log(item.json.json_data);\n    let jsonData;\n  try {\n   jsonData = JSON.parse(item.json.json_data); \n   jsonData[0].RESULT_DATE =DMY;\n  } catch (error) {\n    console.log(error);\n   jsonData = {}; \n  }\n    \n    \n  \n    const data = {\n    \"HEADER\":{\n        \"HCODE_LAB\": item.json.hcode_lab,\n        \"LAB_TYPE\": item.json.nap_lab_item_code,\n        \"RESULT_DATE_FROM\": DMY.replace(/\\d{4}$/, '0101'),\n        \"RESULT_DATE_TO\":DMY.replace(/\\d{4}$/, '1231'),\n        },\n      \"LAB_RESULT\" : jsonData,\n    };\n\n  const options = {\n    method: \"POST\",\n    headers: header,\n    url: api,\n    body: data,\n  };  \n  // console.log(JSON.stringify(data));\n  \ntry{\n    const response = await this.helpers.request(options);    \n    // console.log(JSON.parse(response));\n    const dataSuccess = JSON.parse(response);\n    console.log(dataSuccess);\n    // console.log(dataSuccess.LAB_RESULT_ERROR);\n    item.json.success = (dataSuccess.LAB_RESULT_ERROR.length == 0) ? 'send' : 'error';\n  }catch(err){\n    console.log(err.message)\n    const error = JSON.stringify(err.response);\n    // console.log(JSON.parse(error));\n    // console.log(error.message);\n    item.json.success = 'error';\n  }\n\n}\n\nreturn $input.all();"
+      },
+      "id": "c2ddb569-9f06-454d-a28e-a4045a2a5d7d",
+      "name": "Set Lab Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        500
+      ],
+      "alwaysOutputData": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "id": "1ae25d5c-6ee3-44ff-b959-a2dd2c9f6d67",
+      "name": "Remove Duplicates",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 1.1,
+      "position": [
+        840,
+        1000
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n\t\n(select token from token where date(create_date) = date(now())) as token,\n  group_concat(DISTINCT users.cid) as sendto\nFROM\n    users\nWHERE\n  users.active = 1\n  and users.project = 'lab'\n",
+        "options": {}
+      },
+      "id": "f30f292f-ba94-4556-990f-b82429196fe1",
+      "name": "Select Visit Not Send",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1360,
+        1180
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "mySql": {
+          "id": "geh5j9rJbkRDyG0U",
+          "name": "MySQL Lookup_db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex",
+        "options": {}
+      },
+      "id": "ba5c1540-70ff-4601-a9d0-ddb907442ed2",
+      "name": "Merge1",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        1580,
+        1080
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select \n  vn,\n  hn,\n  vstdate,\n  lab_item_code\nfrom \n   lab_visit\nWHERE\n  lab_request_id = '{{ $json.lab_request_id }}'\n",
+        "options": {}
+      },
+      "id": "be2430ed-a826-4a22-80b5-1279c611b607",
+      "name": "MySQL",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1360,
+        1000
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "geh5j9rJbkRDyG0U",
+          "name": "MySQL Lookup_db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "deleteTable",
+        "table": {
+          "__rl": true,
+          "value": "lab_visit",
+          "mode": "list",
+          "cachedResultName": "lab_visit"
+        },
+        "deleteCommand": "delete",
+        "where": {
+          "values": [
+            {
+              "column": "vn",
+              "value": "={{ $json.vn }}"
+            },
+            {
+              "column": "lab_item_code",
+              "value": "={{ $json.lab_item_code }}"
+            },
+            {
+              "column": "vstdate",
+              "value": "={{ $json.vstdate }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "366015b1-ee0d-496d-9379-62102cb493e3",
+      "name": "MySQL1",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1920,
+        1080
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "geh5j9rJbkRDyG0U",
+          "name": "MySQL Lookup_db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "hn",
+        "options": {}
+      },
+      "id": "41281894-755b-4c97-9c7d-9f1c6e7ca240",
+      "name": "Split Out",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        620,
+        1000
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n\t\n(select token from token where date(create_date) = date(now())) as token,\n  group_concat(DISTINCT users.cid) as sendto\nFROM\n    users\nWHERE\n  users.active = 1\n  and users.project = 'cohiv'\n",
+        "options": {}
+      },
+      "id": "a351c733-f646-44fc-b084-3a9cd932db90",
+      "name": "MySQL2",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        620,
+        1340
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "mySql": {
+          "id": "geh5j9rJbkRDyG0U",
+          "name": "MySQL Lookup_db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex",
+        "options": {}
+      },
+      "id": "fa76938b-6995-4f6d-96da-b0c8732d07cc",
+      "name": "Merge2",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        840,
+        1320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const api = 'https://morpromt2c.moph.go.th/api/send-message/send-now';\n\nlet token = $input.first().json.token;\nconst headers = {\n          \"Authorization\" : `Bearer ${token}`,\n          \"Content-Type\" : \"application/json\"\n        };\nconst user = $input.first().json.sendto.split(',');\nconst jsonData = [];\nfor (const item of $input.all()) {\n\n  const hn = item.json.hn;\n  const vstdate = item.json.vstdate;\n  const data = {\n    type: 'text',\n    text: `ตรวจสอบผล lab HN ${hn}  วันที่รับบริการ ${vstdate}`\n  }\n  jsonData.push(data);\n}\n\n\nconst data = {\n  datas:user,\n  messages: jsonData\n};\n\n const options = {\n    method: \"POST\",\n    headers:headers,\n    uri: api,\n    body: data,\n  };  \n\n try{\n  const response = await this.helpers.request(options); \n   $input.first().json.sendstatus = 1;\n }catch(err){\n    const error = JSON.stringify(err.response);\n   $input.first().json.sendstatus = 0;\n}\n\n\nreturn $input.all();"
+      },
+      "id": "0692d9c4-eb40-40e5-9b1e-4dfd7de30992",
+      "name": "แจ้งรายการต้องแก้ไขผ่านหมอพร้อม",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        1080
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const api = 'https://morpromt2c.moph.go.th/api/send-message/send-now';\n\nlet token = $input.first().json.token;\nconst headers = {\n          \"Authorization\" : `Bearer ${token}`,\n          \"Content-Type\" : \"application/json\"\n        };\nconst user = $input.first().json.sendto.split(',');\nconst jsonData = [];\nfor (const item of $input.all()) {\n\n  const count_hn = item.json.count_hn;\n  const data = {\n    type: 'text',\n    text: `ไม่สามารถส่งรายงาน NAPPLUS ได้จำนวน ${count_hn} รายการ`\n  }\n  jsonData.push(data);\n}\n\n\nconst data = {\n  datas:user,\n  messages: jsonData\n};\n\n const options = {\n    method: \"POST\",\n    headers:headers,\n    uri: api,\n    body: data,\n  };  \n\n try{\n  const response = await this.helpers.request(options); \n   $input.first().json.sendstatus = 1;\n }catch(err){\n    const error = JSON.stringify(err.response);\n   $input.first().json.sendstatus = 0;\n}\n\n\nreturn $input.all();"
+      },
+      "id": "94428dd2-16c7-4512-8cad-f9e69d54b231",
+      "name": "แจ้งจำนวนรายการที่ไม่สามารถส่งได้ผ่านหมอพร้อม",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        1320
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.success }}",
+                    "rightValue": "send",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "SEND"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "e2df65ad-e5e9-4722-bd08-3ab94d5732a5",
+                    "leftValue": "={{ $json.success }}",
+                    "rightValue": "error",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ERROR"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2b7b2f67-10a7-4d9a-bae1-7ea50ffa5050",
+      "name": "Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        1360,
+        780
+      ]
+    },
+    {
+      "parameters": {
+        "fieldsToSummarize": {
+          "values": [
+            {
+              "field": "lab_request_id"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "563d079a-e3d8-458a-924f-d71d4273c469",
+      "name": "Count Send",
+      "type": "n8n-nodes-base.summarize",
+      "typeVersion": 1,
+      "position": [
+        1700,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n\t\n(select token from token where date(create_date) = date(now())) as token,\n  group_concat(DISTINCT users.cid) as sendto\nFROM\n    users\nWHERE\n  users.active = 1\n  and users.project = 'cohiv'\n",
+        "options": {}
+      },
+      "id": "7858004b-029c-48b1-8ff8-bdd82d09b8a7",
+      "name": "MySQL3",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1940,
+        780
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "mySql": {
+          "id": "geh5j9rJbkRDyG0U",
+          "name": "MySQL Lookup_db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex",
+        "options": {}
+      },
+      "id": "4efffc7c-e76e-4c5c-9e49-fdcad24a5ce5",
+      "name": "Merge3",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        2040,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const api = 'https://morpromt2c.moph.go.th/api/send-message/send-now';\n\nlet token = $input.first().json.token;\nconst headers = {\n          \"Authorization\" : `Bearer ${token}`,\n          \"Content-Type\" : \"application/json\"\n        };\nconst user = $input.first().json.sendto.split(',');\nconst jsonData = [];\nfor (const item of $input.all()) {\n\n  const count_hn = item.json.count_lab_request_id;\n  const data = {\n    type: 'text',\n    text: `ส่งรายงาน NAPPLUS ได้จำนวน ${count_hn} รายการ`\n  }\n  jsonData.push(data);\n}\n\n\nconst data = {\n  datas:user,\n  messages: jsonData\n};\n\n const options = {\n    method: \"POST\",\n    headers:headers,\n    uri: api,\n    body: data,\n  };  \n\n try{\n  const response = await this.helpers.request(options); \n   $input.first().json.sendstatus = 1;\n }catch(err){\n    const error = JSON.stringify(err.response);\n   $input.first().json.sendstatus = 0;\n}\n\n\nreturn $input.all();"
+      },
+      "id": "95be7966-3bd4-492c-8d42-96d5f0ccf4c8",
+      "name": "สรุปรายงานผ่านหมอพร้อม",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2260,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## แจ้งเตือนเจ้าหน้าที่ LAB  กรณีส่งไม่ได้",
+        "height": 242.73684210526272,
+        "width": 429.8080495356033
+      },
+      "id": "83be85c2-9a10-4b21-a7fc-bc4457398d47",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1700,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## แจ้งเตือนผู้รับผิดชอบกรณีส่งผ่าน",
+        "height": 242.73684210526272,
+        "width": 429.8080495356033
+      },
+      "id": "c53b88dd-c540-4b8e-af70-ed63038373e5",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2020,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## แจ้งเตือนผู้รับผิดชอบกรณีส่งไม่ได้",
+        "height": 286.5386996904019,
+        "width": 444.40866873064965
+      },
+      "id": "3c72ddbb-357b-459c-938b-514043115fb5",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        820,
+        1220
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Insert Lab Visit History": {
+      "main": [
+        [
+          {
+            "node": "Select All VisitLab Not Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET LAB Request ID": {
+      "main": [
+        [
+          {
+            "node": "Lab Request ID Not Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Lab Request ID TO Lab Visit": {
+      "main": [
+        [
+          {
+            "node": "Select Result Lab To JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "17.00": {
+      "main": [
+        [
+          {
+            "node": "Select Lab Result (101,102)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Select Lab Result (204)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Insert Lab Visit History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Lab Result (101,102)": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Count Not Send": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "MySQL2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Lab Result (204)": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lab Request ID Not Empty": {
+      "main": [
+        [
+          {
+            "node": "Update Lab Request ID TO Lab Visit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Result Lab To JSON": {
+      "main": [
+        [
+          {
+            "node": "Set Lab Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select All VisitLab Not Send": {
+      "main": [
+        [
+          {
+            "node": "GET LAB Request ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Lab Result": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Count Not Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Visit Not Send": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "MySQL": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "แจ้งรายการต้องแก้ไขผ่านหมอพร้อม",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MySQL2": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "แจ้งจำนวนรายการที่ไม่สามารถส่งได้ผ่านหมอพร้อม",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "แจ้งรายการต้องแก้ไขผ่านหมอพร้อม": {
+      "main": [
+        [
+          {
+            "node": "MySQL1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Update Send Status",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Count Send",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "MySQL",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Select Visit Not Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MySQL3": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge3": {
+      "main": [
+        [
+          {
+            "node": "สรุปรายงานผ่านหมอพร้อม",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Count Send": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "MySQL3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "24ae3041-4220-476d-9317-a7d9458f2623",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e4b54006aa31e581c12cb31878456cb79682df77e43a322ffa81f55cdcd926a1"
+  },
+  "id": "7x0GNomKCjqqSvLL",
+  "tags": []
+}

@@ -1,0 +1,143 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "29 0 * * *"
+            }
+          ]
+        }
+      },
+      "id": "ea88c60b-c6a1-4710-8387-480a95fdd907",
+      "name": "Schedule Trigger1",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        320,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "table": {
+          "__rl": true,
+          "value": "token",
+          "mode": "list",
+          "cachedResultName": "token"
+        },
+        "dataMode": "defineBelow",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "token",
+              "value": "={{ $json.data }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1bbc6535-e766-42b3-9ad0-7f500ebf2876",
+      "name": "MySQL",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        960,
+        460
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "geh5j9rJbkRDyG0U",
+          "name": "MySQL Lookup_db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select * from moph_user",
+        "options": {}
+      },
+      "id": "97714953-359b-4ddc-9295-0a5b2b453df1",
+      "name": "MySQL1",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        540,
+        460
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "mySql": {
+          "id": "geh5j9rJbkRDyG0U",
+          "name": "MySQL Lookup_db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://cvp1.moph.go.th/token?Action=get_moph_access_token&user={{ $json.username }}&password_hash={{ $json.password_hash }}&hospital_code={{ $json.hoscode }} ",
+        "options": {}
+      },
+      "id": "2acdcc7e-6669-47e5-a8b4-7a0cd75c2aea",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        740,
+        460
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "MySQL1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MySQL1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "15f82f95-662d-40eb-9b0e-d17e7eb3e1aa",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e4b54006aa31e581c12cb31878456cb79682df77e43a322ffa81f55cdcd926a1"
+  },
+  "id": "yDwEBCthx3OpI1Zd",
+  "tags": []
+}
