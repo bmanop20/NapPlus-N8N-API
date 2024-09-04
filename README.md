@@ -1,5 +1,7 @@
 ### การส่งข้อมูลผ่าน API ระบบ NAPPLUS (HOSXP V.3)
 
+โดย นายมานพ  บุญจำเนียร นักวิชาการคอมพิวเตอร์ปฏิบัติการ   โรงพยาบาลแม่วาง จังหวัดเชียงใหม่   Email b.manop20@gmail.com
+
 ### [ขั้นตอนการติดตั้ง](https://github.com/bmanop20/NapPlus-N8N-API/tree/main/shell) (Click)
 
 ### [เอกสารอื่น ๆ ](https://drive.google.com/drive/folders/1-3XP6dKwj2rolfeSuIxmtjf38OdXCTyY)
