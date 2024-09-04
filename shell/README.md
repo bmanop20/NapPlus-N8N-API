@@ -2,7 +2,7 @@
 
 ความต้องการ
 
-* Oracle LInux 9
+* Oracle Linux 9
 
 | Component | Sizing                                   | Supported                   |
 | --------- | ---------------------------------------- | --------------------------- |
@@ -53,7 +53,11 @@
 
   ```bash
   docker exec -it pgsql bash
+  ```
+  ```bash
   pgsql -h localhost -U postgres
+  ```
+  ```bash
   create database n8n;
   ```
 * Run n8n เพื่อสร้าง Volume และ defalut config
